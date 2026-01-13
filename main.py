@@ -1,7 +1,12 @@
-import requests, json, time, os, sys
+import requests, json
+import os
+import sys
+import uuid  # ← Added back
+import websocket
 
 # Default ComfyUI server
 SERVER_ADDRESS = "http://127.0.0.1:8188"
+WS_ADDRESS = f"ws://{SERVER_ADDRESS.split('://')[1]}/ws"
 
 def load_workflow(workflow_file):
     if not os.path.exists(workflow_file):
@@ -10,6 +15,17 @@ def load_workflow(workflow_file):
         workflow = json.load(f)
     print(f"Loaded workflow → {os.path.basename(workflow_file)}")
     return workflow
+
+def queue_prompt(workflow, client_id):
+    payload = {
+        "prompt": workflow,
+        "client_id": client_id  # ← Important!
+    }
+    response = requests.post(f"{SERVER_ADDRESS}/prompt", json=payload)
+    if response.status_code != 200:
+        print(f"Queue error: {response.status_code} - {response.text}")
+        return None
+    return response.json()["prompt_id"]
 
 def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
     workflow = load_workflow(workflow_file)
@@ -28,39 +44,88 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
     
     replace_placeholder(workflow)
     
-    payload = {"prompt": workflow}
+    # Generate unique client_id
+    client_id = str(uuid.uuid4())
     
-    response = requests.post(f"{server_address}/prompt", json=payload)
-    if response.status_code != 200:
-        print(f"Queue error for {workflow_file}: {response.status_code}")
-        print(response.text)
+    # Queue the prompt with client_id
+    prompt_id = queue_prompt(workflow, client_id)
+    if not prompt_id:
         return None
     
-    prompt_id = response.json()["prompt_id"]
     print(f"   Job queued: {prompt_id}")
+    print("   Generating ", end="", flush=True)
     
-    # Poll until done
-    print("   Generating", end="", flush=True)
-    while True:
-        history_resp = requests.get(f"{server_address}/history/{prompt_id}")
-        if history_resp.status_code != 200:
-            time.sleep(1)
-            continue
-        
-        history = history_resp.json()
-        if prompt_id in history:
-            outputs = history[prompt_id]["outputs"]
-            for node_id in outputs:
-                if "images" in outputs[node_id]:
-                    images = outputs[node_id]["images"]
-                    if images:
-                        filename = images[0]["filename"]
-                        url = f"{server_address}/view?filename={filename}&type=output"
-                        print(" → Done!")
-                        return url
-        
-        print(".", end="", flush=True)
-        time.sleep(2)
+    # Connect with client_id
+    ws_url = f"{WS_ADDRESS}?clientId={client_id}"
+    try:
+        ws = websocket.WebSocket()
+        ws.connect(ws_url)
+        print(f" (connected as {client_id[:8]}...)")  # Optional nice touch
+    except Exception as e:
+        print(f"\n   Failed to connect WebSocket: {e}")
+        return None
+    
+    try:
+        while True:
+            message = ws.recv()
+            if not message:
+                continue
+                
+            data = json.loads(message)
+            msg_type = data.get("type")
+            
+            if msg_type == "progress":
+                p = data["data"]
+                print(f"\r   Progress: {p['value']}/{p['max']} ({p.get('percent', 0):.1f}%)   ", end="", flush=True)
+            
+            elif msg_type == "executing":
+                node = data.get("data", {}).get("node")
+                if node:
+                    print(f"\r   Executing node: {node}                  ", end="", flush=True)
+            
+            elif msg_type in ["execution_success", "execution_cached"]:
+                print("\r   Generation finished!                       ")
+                
+                # Now fetch images
+                history_resp = requests.get(f"{server_address}/history/{prompt_id}")
+                if history_resp.status_code == 200:
+                    history = history_resp.json().get(prompt_id, {})
+                    outputs = history.get("outputs", {})
+                    
+                    image_urls = []
+                    for node_id in outputs:
+                        if "images" in outputs[node_id]:
+                            for img in outputs[node_id]["images"]:
+                                filename = img["filename"]
+                                subfolder = img.get("subfolder", "")
+                                type_ = img.get("type", "output")
+                                params = f"filename={filename}&type={type_}"
+                                if subfolder:
+                                    params += f"&subfolder={subfolder}"
+                                url = f"{server_address}/view?{params}"
+                                image_urls.append(url)
+                    
+                    if image_urls:
+                        print(f" → {len(image_urls)} image(s) ready!")
+                        return image_urls
+                    else:
+                        print(" → No images found")
+                        return None
+            
+            elif msg_type == "execution_error":
+                print("\n   ERROR during execution:")
+                print(json.dumps(data.get("data", {}), indent=2))
+                return None
+                
+    except Exception as e:
+        print(f"\n   WebSocket error: {e}")
+    finally:
+        ws.close()
+    
+    return None
+
+# Main block remains exactly the same as your current one
+# (No changes needed below __main__)
 
 # ============================= MAIN =============================
 if __name__ == "__main__":
@@ -72,7 +137,7 @@ if __name__ == "__main__":
         print("Place your workflow files (e.g., qwen.json, hidream.json) here and try again.")
         sys.exit(1)
     
-    # Your default prompt (the toddler boy one you love)
+    # Your default prompt
     default_prompt = (
         "Create an adorable 3D animated toddler boy, around 2-3 years old, "
         "with large expressive black eyes, short tousled brown hair, soft rosy cheeks, "
@@ -100,7 +165,6 @@ if __name__ == "__main__":
         prompt_to_use = " ".join(sys.argv[2:]) if len(sys.argv) >= 3 else default_prompt
         print(f"Running single workflow: {specific_workflow}\n")
     else:
-        # Default behavior: run ALL workflows
         workflows_to_run = sorted(workflow_files)
         prompt_to_use = default_prompt
         print(f"No workflow specified → running ALL {len(workflows_to_run)} workflows with default prompt\n")
@@ -112,10 +176,11 @@ if __name__ == "__main__":
     results = []
     for wf in workflows_to_run:
         print(f"[{workflows_to_run.index(wf) + 1}/{len(workflows_to_run)}] {wf}")
-        url = generate_image(prompt_to_use, wf)
-        if url:
-            results.append((wf, url))
-            print(f"   Image: {url}\n")
+        urls = generate_image(prompt_to_use, wf)
+        if urls:
+            for i, url in enumerate(urls, 1):
+                print(f"   Image {i}: {url}")
+            results.append((wf, urls))
         else:
             results.append((wf, None))
             print(f"   Failed to generate.\n")
@@ -123,10 +188,10 @@ if __name__ == "__main__":
 
     # Final summary
     print("ALL DONE! Summary:")
-    for wf, url in results:
-        status = url if url else "(failed)"
+    for wf, urls in results:
+        status = f"{len(urls)} image(s)" if urls else "(failed)"
         print(f"   • {wf} → {status}")
 
-    if any(url for _, url in results):
+    if any(urls for _, urls in results):
         print("\nCheck your ComfyUI output folder or open the URLs above.")
     print("\nYour NAS models are working great! 🚀")

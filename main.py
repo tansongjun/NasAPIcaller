@@ -1,8 +1,4 @@
-import requests, json
-import os
-import sys
-import uuid  # ← Added back
-import websocket
+import requests, json, os, sys, uuid, websocket
 
 # Default ComfyUI server
 SERVER_ADDRESS = "http://127.0.0.1:8188"
@@ -19,7 +15,7 @@ def load_workflow(workflow_file):
 def queue_prompt(workflow, client_id):
     payload = {
         "prompt": workflow,
-        "client_id": client_id  # ← Important!
+        "client_id": client_id
     }
     response = requests.post(f"{SERVER_ADDRESS}/prompt", json=payload)
     if response.status_code != 200:
@@ -44,10 +40,8 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
     
     replace_placeholder(workflow)
     
-    # Generate unique client_id
     client_id = str(uuid.uuid4())
     
-    # Queue the prompt with client_id
     prompt_id = queue_prompt(workflow, client_id)
     if not prompt_id:
         return None
@@ -55,12 +49,11 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
     print(f"   Job queued: {prompt_id}")
     print("   Generating ", end="", flush=True)
     
-    # Connect with client_id
     ws_url = f"{WS_ADDRESS}?clientId={client_id}"
     try:
         ws = websocket.WebSocket()
         ws.connect(ws_url)
-        print(f" (connected as {client_id[:8]}...)")  # Optional nice touch
+        print(f" (connected as {client_id[:8]}...)")
     except Exception as e:
         print(f"\n   Failed to connect WebSocket: {e}")
         return None
@@ -123,9 +116,6 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
         ws.close()
     
     return None
-
-# Main block remains exactly the same as your current one
-# (No changes needed below __main__)
 
 # ============================= MAIN =============================
 if __name__ == "__main__":

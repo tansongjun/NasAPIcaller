@@ -105,7 +105,7 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
     response = requests.post(f"{server_address}/prompt", json=payload)
     if response.status_code != 200:
         print(f"Queue error: {response.status_code}\n{response.text}")
-        return None
+        return []
 
     prompt_id = response.json()["prompt_id"]
     print(f"   Job queued: {prompt_id}")
@@ -120,14 +120,21 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
         history = history_resp.json()
         if prompt_id in history:
             outputs = history[prompt_id]["outputs"]
+            urls = []
+
             for node_id in outputs:
                 if "images" in outputs[node_id]:
-                    images = outputs[node_id]["images"]
-                    if images:
-                        filename = images[0]["filename"]
+                    for img_data in outputs[node_id]["images"]:
+                        filename = img_data["filename"]
                         url = f"{server_address}/view?filename={filename}&type=output"
-                        print(" → Done!")
-                        return url
+                        urls.append(url)
+
+            if urls:
+                print(f" → Done! ({len(urls)} image(s) generated)")
+                return urls
+            else:
+                print(" → Done, but no images found in outputs")
+                return []
 
         print(".", end="", flush=True)
         time.sleep(2)

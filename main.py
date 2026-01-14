@@ -132,27 +132,27 @@ if __name__ == "__main__":
         sys.exit(1)
     
     # Your default prompt
-    default_prompt = (
-        "Create an adorable 3D animated toddler boy, around 2-3 years old, "
-        "with large expressive black eyes, short tousled brown hair, soft rosy cheeks, "
-        "and a subtle happy smile, standing confidently with arms relaxed. "
-        "He wears a bright yellow onesie pajamas with a small embroidered teddy bear on the chest, "
-        "white ribbed socks, and simple white shoes. "
-        "Hyper-realistic Pixar/DreamWorks CGI style, exaggerated cute proportions, "
-        "vibrant colors, detailed fabric and skin textures, full-body frontal view, "
-        "minimalist neutral beige gradient background with subtle floor shadow, "
-        "soft warm natural daylight lighting, highly detailed, clean composition."
-    )
+    # default_prompt = (
+    #     "Create an adorable 3D animated toddler boy, around 2-3 years old, "
+    #     "with large expressive black eyes, short tousled brown hair, soft rosy cheeks, "
+    #     "and a subtle happy smile, standing confidently with arms relaxed. "
+    #     "He wears a bright yellow onesie pajamas with a small embroidered teddy bear on the chest, "
+    #     "white ribbed socks, and simple white shoes. "
+    #     "Hyper-realistic Pixar/DreamWorks CGI style, exaggerated cute proportions, "
+    #     "vibrant colors, detailed fabric and skin textures, full-body frontal view, "
+    #     "minimalist neutral beige gradient background with subtle floor shadow, "
+    #     "soft warm natural daylight lighting, highly detailed, clean composition."
+    # )
 
     # Use this prompt to test reference image functionality
-    # default_prompt = (
-    #     "Create a female version of the exact same adorable toddler character from the reference image:  "
-    #     "transform the boy into a cute 2-3 year old girl, "
-    #     "keep the same large expressive black eyes, same short tousled brown hair but slightly softer/feminine styling, "
-    #     "same soft rosy chubby cheeks, same subtle happy smile, same bright yellow onesie pajamas with small embroidered teddy bear,"
-    #     "same confident standing pose with arms relaxed, identical proportions and body shape just gendered female, "
-    #     "hyper-realistic Pixar/DreamWorks CGI style, vibrant colors, full-body frontal view, minimalist neutral background"
-    # )
+    default_prompt = (
+        "Create a female version of the exact same adorable toddler character from the reference image:  "
+        "transform the boy into a cute 2-3 year old girl, "
+        "keep the same large expressive black eyes, same short tousled brown hair but slightly softer/feminine styling, "
+        "same soft rosy chubby cheeks, same subtle happy smile, same bright yellow onesie pajamas with small embroidered teddy bear,"
+        "same confident standing pose with arms relaxed, identical proportions and body shape just gendered female, "
+        "hyper-realistic Pixar/DreamWorks CGI style, vibrant colors, full-body frontal view, minimalist neutral background"
+    )
     
     # Check if user wants to run only one specific workflow
     if len(sys.argv) >= 2:

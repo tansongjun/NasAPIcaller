@@ -122,7 +122,7 @@
   },
   "57:3": {
     "inputs": {
-      "seed": 0,
+      "seed": 300,
       "steps": 4,
       "cfg": 1,
       "sampler_name": "res_multistep",

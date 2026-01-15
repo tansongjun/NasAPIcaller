@@ -2,7 +2,7 @@
 from time import time
 import requests, json, time, os, sys
 
-from fastapi import FastAPI, HTTPException, Body
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 import uuid
 import json
@@ -10,6 +10,20 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 SERVER_ADDRESS = "http://127.0.0.1:8188"
+
+def upload_uploadfile_to_comfyui(upload: UploadFile, server_address: str = SERVER_ADDRESS, overwrite: bool = True) -> str | None:
+    filename = upload.filename or f"reference_{uuid.uuid4().hex}.png"
+    content_type = upload.content_type or "application/octet-stream"
+
+    files = {"image": (filename, upload.file, content_type)}
+    data = {"overwrite": str(overwrite).lower()}
+
+    r = requests.post(f"{server_address}/upload/image", files=files, data=data)
+    if r.status_code != 200:
+        print(f"Upload failed: {r.status_code} - {r.text}")
+        return None
+    return filename
+
 def upload_image(image_path: str, server_address: str = SERVER_ADDRESS, overwrite: bool = True) -> str | None:
     """Upload image to ComfyUI/input and return the filename used by ComfyUI"""
     if not os.path.exists(image_path):
@@ -79,17 +93,17 @@ def find_reference_image_for_workflow(wf_name: str) -> str | None:
     for file in folder.glob("*reference*.png"):
         return str(file)
 
-def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS):
+def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None):
     workflow = load_workflow(workflow_file)
 
+    uploaded_filename = reference_filename
     # 1. Try to find & upload reference image
-    ref_path = find_reference_image_for_workflow(os.path.basename(workflow_file))
-    uploaded_filename = None
-
-    if ref_path:
-        uploaded_filename = upload_image(ref_path, server_address)
-    else:
-        print("   No reference image found for this workflow")
+    if not uploaded_filename:
+        ref_path = find_reference_image_for_workflow(os.path.basename(workflow_file))
+        if ref_path:
+            uploaded_filename = upload_image(ref_path, server_address)
+        else:
+            print("   No reference image found for this workflow")
 
     # 2. Replace placeholders
     replace_prompt_and_image_ref(workflow, prompt, uploaded_filename)
@@ -151,9 +165,9 @@ def list_workflows():
 
 @app.post("/generate")
 async def generate(
-    workflow_name: str = Body(...),
-    prompt: str = Body(...),
-    # You can add more fields later: steps, cfg, seed, reference_override, etc.
+    workflow_name: str = Form(...),
+    prompt: str = Form(...),
+    reference_image: UploadFile | None = File(None),
 ):
     if not workflow_name.endswith(".json"):
         workflow_name += ".json"
@@ -162,17 +176,25 @@ async def generate(
     if not workflow_path.is_file():
         raise HTTPException(status_code=404, detail="Workflow not found")
 
+    uploaded_filename = None
+    if reference_image is not None:
+        uploaded_filename = upload_uploadfile_to_comfyui(reference_image)
+        if uploaded_filename is None:
+            raise HTTPException(status_code=400, detail="Failed to upload reference image")
+
     try:
-        urls = generate_image(prompt, str(workflow_path))  # your existing function
+        urls = generate_image(prompt, str(workflow_path), reference_filename=uploaded_filename)
         return {
             "status": "success",
             "images": urls,
             "workflow": workflow_name,
-            "prompt": prompt
+            "prompt": prompt,
+            "reference_image": uploaded_filename,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+# ============================= MAIN =============================
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)

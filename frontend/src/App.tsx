@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -25,6 +25,8 @@ function App() {
   const [results, setResults] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [referenceFile, setReferenceFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Load workflows from backend on mount
   useEffect(() => {
@@ -49,13 +51,17 @@ function App() {
     setResults([])
 
     try {
-      const res = await fetch('http://localhost:8000/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          workflow_name: selectedWorkflow,
-          prompt: prompt.trim()
-        })
+      const formData = new FormData()
+      formData.append("workflow_name", selectedWorkflow)
+      formData.append("prompt", prompt.trim())
+
+      if (referenceFile) {
+        formData.append("reference_image", referenceFile)
+      }
+
+      const res = await fetch("http://localhost:8000/generate", {
+        method: "POST",
+        body: formData,
       })
 
       if (!res.ok) {
@@ -66,11 +72,12 @@ function App() {
       const data = await res.json()
       setResults(data.images || [])
     } catch (err: any) {
-      setError(err.message || 'Unknown error')
+      setError(err.message || "Unknown error")
     } finally {
       setLoading(false)
     }
   }
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-indigo-50 p-8 text-slate-900">
@@ -110,6 +117,43 @@ function App() {
               />
             </div>
 
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Reference Image (optional)</label>
+
+              <div className="flex items-center gap-3">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setReferenceFile(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-slate-700
+                 file:mr-4 file:rounded-md file:border-0
+                 file:bg-slate-100 file:px-4 file:py-2
+                 file:text-sm file:font-medium file:text-slate-700
+                 hover:file:bg-slate-200"
+                />
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={!referenceFile}
+                  onClick={() => {
+                    setReferenceFile(null)
+                    if (fileInputRef.current) fileInputRef.current.value = ""
+                  }}
+                >
+                  Clear
+                </Button>
+              </div>
+
+              {referenceFile && (
+                <p className="text-xs text-slate-500">
+                  Selected: <span className="font-mono">{referenceFile.name}</span>
+                </p>
+              )}
+            </div>
+
+
             <Button
               onClick={handleGenerate}
               disabled={loading || workflows.length === 0 || !prompt.trim()}
@@ -127,7 +171,7 @@ function App() {
         </Card>
 
         {results.length > 0 && (
-            <Card className="bg-white border-slate-200 shadow-sm">
+          <Card className="bg-white border-slate-200 shadow-sm">
             <CardHeader>
               <CardTitle>Results</CardTitle>
             </CardHeader>

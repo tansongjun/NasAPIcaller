@@ -92,7 +92,7 @@ def find_reference_image_for_workflow(wf_name: str) -> str | None:
     for file in folder.glob("*reference*.png"):
         return str(file)
 
-def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None):
+def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None, width: int | None = None, height: int | None = None,):
     workflow = load_workflow(workflow_file)
 
     uploaded_filename = reference_filename
@@ -104,6 +104,17 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
         else:
             print("   No reference image found for this workflow")
 
+    def snap_to_64(x: int) -> int:
+        return max(256, (x // 64) * 64)
+
+    if width or height:
+        for node in workflow.values():
+            if node.get("class_type") == "EmptySD3LatentImage":
+                if width is not None:
+                    node["inputs"]["width"] = snap_to_64(width)
+                if height is not None:
+                    node["inputs"]["height"] = snap_to_64(height)
+    
     # 2. Replace placeholders
     replace_prompt_and_image_ref(workflow, prompt, uploaded_filename)
 
@@ -166,6 +177,8 @@ def list_workflows():
 async def generate(
     workflow_name: str = Form(...),
     prompt: str = Form(...),
+    width: int | None = Form(None),
+    height: int | None = Form(None),
     reference_image: UploadFile | None = File(None),
 ):
     if not workflow_name.endswith(".json"):
@@ -182,13 +195,16 @@ async def generate(
             raise HTTPException(status_code=400, detail="Failed to upload reference image")
 
     try:
-        urls = generate_image(prompt, str(workflow_path), reference_filename=uploaded_filename)
+        urls = generate_image(prompt, str(workflow_path), reference_filename=uploaded_filename, width=width,
+            height=height,)
         return {
             "status": "success",
             "images": urls,
             "workflow": workflow_name,
             "prompt": prompt,
             "reference_image": uploaded_filename,
+             "width": width,
+            "height": height,
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

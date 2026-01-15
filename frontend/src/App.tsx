@@ -27,6 +27,8 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [referenceFile, setReferenceFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const [width, setWidth] = useState(1024)
+  const [height, setHeight] = useState(1024)
 
   // Load workflows from backend on mount
   useEffect(() => {
@@ -54,6 +56,8 @@ function App() {
       const formData = new FormData()
       formData.append("workflow_name", selectedWorkflow)
       formData.append("prompt", prompt.trim())
+      formData.append("width", String(width))
+      formData.append("height", String(height))
 
       if (referenceFile) {
         formData.append("reference_image", referenceFile)
@@ -116,6 +120,33 @@ function App() {
                 className="min-h-[140px] bg-white border-slate-200 font-mono text-slate-900 placeholder:text-slate-400"
               />
             </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Width</label>
+                <input
+                  type="number"
+                  min={256}
+                  step={64}
+                  value={width}
+                  onChange={(e) => setWidth(Number(e.target.value))}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Height</label>
+                <input
+                  type="number"
+                  min={256}
+                  step={64}
+                  value={height}
+                  onChange={(e) => setHeight(Number(e.target.value))}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2"
+                />
+              </div>
+            </div>
+
 
             <div className="space-y-2">
               <label className="text-sm font-medium">Reference Image (optional)</label>

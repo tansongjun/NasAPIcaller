@@ -1,10 +1,20 @@
-# NasAPIcaller
-Code for us to load open source models from NAS (suntec) into local GPU.
+# NAS API Caller – ComfyUI Local Runner
 
-Ensure comfyui server is running before executing main.py
+Load and run open-source models stored on NAS (Suntec) directly on your local GPU using ComfyUI.
 
-main.py will execute workflows for all jsons in the same folder as it. 
+## Quick Start
 
-To attach a reference image to the model, place the image in the same folder as main.py and rename the image to the respective model. 
+1. Make sure **ComfyUI server is already running** on your machine  
+   (usually at `http://127.0.0.1:8188`)
 
-Do note that flux.2 dev is a very large model and may take a significiant amount of time to load.
+2. Place your workflow files (`.json`) in the same folder as `main.py`
+
+3. (Optional) Add reference/control images:
+   - Put the image in the same folder as `main.py`
+   - Name it exactly the same as your workflow file (but with image extension)
+
+
+4. Run the script:
+
+```bash
+python main.py

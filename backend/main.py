@@ -92,9 +92,30 @@ def find_reference_image_for_workflow(wf_name: str) -> str | None:
     for file in folder.glob("*reference*.png"):
         return str(file)
 
-def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None, width: int | None = None, height: int | None = None,):
+def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None, 
+                   width: int | None = None, height: int | None = None, fps: int | None = None, frame_count: int | None = None):
     workflow = load_workflow(workflow_file)
 
+    # Override primitive nodes (very common in LTX-2 workflows)
+    for node_id, node in workflow.items():
+        cls = node.get("class_type", "")
+
+        # Frame count
+        if cls == "PrimitiveInt" and "_meta" in node and "Frame Count" in node["_meta"].get("title", ""):
+            if frame_count is not None:
+                node["inputs"]["value"] = frame_count
+
+        # FPS (both int and float versions exist)
+        if cls in ["PrimitiveInt", "PrimitiveFloat"] and "Frame Rate" in node["_meta"].get("title", ""):
+            if fps is not None:
+                node["inputs"]["value"] = fps
+
+        # Resolution on EmptyImage / latent nodes (LTX-2 uses 1280×720 base usually)
+        if cls == "EmptyImage" or "EmptyLTXVLatentVideo" in cls:
+            if width is not None:
+                node["inputs"]["width"] = width
+            if height is not None:
+                node["inputs"]["height"] = height
     uploaded_filename = reference_filename
     # 1. Try to find & upload reference image
     if not uploaded_filename:
@@ -127,7 +148,7 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
 
     prompt_id = response.json()["prompt_id"]
     print(f"   Job queued: {prompt_id}")
-
+    media_urls = []
     print("   Generating", end="", flush=True)
     while True:
         history_resp = requests.get(f"{server_address}/history/{prompt_id}")
@@ -138,20 +159,53 @@ def generate_image(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
         history = history_resp.json()
         if prompt_id in history:
             outputs = history[prompt_id]["outputs"]
-            urls = []
+            media_urls = []
 
-            for node_id in outputs:
-                if "images" in outputs[node_id]:
-                    for img_data in outputs[node_id]["images"]:
-                        filename = img_data["filename"]
-                        url = f"{server_address}/view?filename={filename}&type=output"
-                        urls.append(url)
+            print("DEBUG - All output nodes and their keys:")
+            for node_id, node_output in outputs.items():
+                print(f"  Node {node_id} ({node_output.get('class_type', 'unknown')}): {list(node_output.keys())}")
+                
+                # Images (your current working case)
+                if "images" in node_output:
+                    for item in node_output["images"]:
+                        filename = item.get("filename")
+                        if filename:
+                            url = f"{server_address}/view?filename={filename}&subfolder={item.get('subfolder','')}&type={item.get('type','output')}"
+                            media_urls.append(url)
+                            print(f"     → Added image: {filename}")
 
-            if urls:
-                print(f" → Done! ({len(urls)} image(s) generated)")
-                return urls
+                # Videos – make it case-insensitive and check alternatives
+                video_keys = ["videos", "video", "files"]  # sometimes custom nodes use singular
+                for vk in video_keys:
+                    if vk in node_output:
+                        items = node_output[vk]
+                        if not isinstance(items, list):
+                            items = [items]
+                        for item in items:
+                            filename = item.get("filename") or item.get("file")
+                            if filename:
+                                subfolder = item.get("subfolder", "")
+                                type_ = item.get("type", "output")
+                                url = f"{server_address}/view?filename={filename}"
+                                if subfolder:
+                                    url += f"&subfolder={subfolder}"
+                                url += f"&type={type_}"
+                                media_urls.append(url)
+                                print(f"     → Added VIDEO: {filename}")
+
+                # Fallback: any node with "filename" directly
+                if "filename" in node_output and filename.endswith(('.mp4', '.webm', '.gif')):
+                    filename = node_output["filename"]
+                    url = f"{server_address}/view?filename={filename}&type=output"
+                    media_urls.append(url)
+                    print(f"     → Added direct video fallback: {filename}")
+
+            # Final result
+            if media_urls:
+                print(f" → Success! Collected {len(media_urls)} media URLs")
+                return media_urls
             else:
-                print(" → Done, but no images found in outputs")
+                print(" → No media detected. Check if SaveVideo node ran and registered output.")
                 return []
 
         print(".", end="", flush=True)
@@ -179,6 +233,8 @@ async def generate(
     prompt: str = Form(...),
     width: int | None = Form(None),
     height: int | None = Form(None),
+    fps: int = Form(24),
+    frame_count: int = Form(121),
     reference_image: UploadFile | None = File(None),
 ):
     if not workflow_name.endswith(".json"):
@@ -195,8 +251,8 @@ async def generate(
             raise HTTPException(status_code=400, detail="Failed to upload reference image")
 
     try:
-        urls = generate_image(prompt, str(workflow_path), reference_filename=uploaded_filename, width=width,
-            height=height,)
+        urls = generate_media(prompt, str(workflow_path), reference_filename=uploaded_filename, width=width,
+            height=height, fps=fps, frame_count=frame_count)
         return {
             "status": "success",
             "images": urls,

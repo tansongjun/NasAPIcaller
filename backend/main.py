@@ -93,7 +93,8 @@ def find_reference_image_for_workflow(wf_name: str) -> str | None:
         return str(file)
 
 def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None, 
-                   width: int | None = None, height: int | None = None, fps: int | None = None, frame_count: int | None = None):
+                   width: int | None = None, height: int | None = None, fps: int | None = None, frame_count: int | None = None, 
+                   steps: int | None = None, shift: float | None = None):
     workflow = load_workflow(workflow_file)
 
     # Override primitive nodes (very common in LTX-2 workflows)
@@ -109,7 +110,19 @@ def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
         if cls in ["PrimitiveInt", "PrimitiveFloat"] and "Frame Rate" in node["_meta"].get("title", ""):
             if fps is not None:
                 node["inputs"]["value"] = fps
+        
+        # Steps
+        if cls == "KSampler":
+            if steps is not None:
+                node["inputs"]["steps"] = steps
+                print(f"Overrode KSampler steps to {steps}")
 
+        # Shift amount
+        if cls == "ModelSamplingAuraFlow":
+            if shift is not None:
+                node["inputs"]["shift"] = shift
+                print(f"Overrode ModelSamplingAuraFlow shift to {shift}")
+                
         # Resolution on EmptyImage / latent nodes (LTX-2 uses 1280×720 base usually)
         if cls == "EmptyImage" or "EmptyLTXVLatentVideo" in cls:
             if width is not None:
@@ -213,12 +226,20 @@ def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
 
 app = FastAPI(title="NAS ComfyUI Runner API")
 
+origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",     # Chrome treats these differently sometimes
+    "http://localhost",
+    "http://127.0.0.1",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],  # Vite default + Next.js
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Optional: expose_headers=["Content-Disposition"] if you return files
 )
 
 @app.get("/workflows")
@@ -235,6 +256,8 @@ async def generate(
     height: int | None = Form(None),
     fps: int = Form(24),
     frame_count: int = Form(121),
+    steps: int | None = Form(9),
+    shift: float | None = Form(3.0),
     reference_image: UploadFile | None = File(None),
 ):
     if not workflow_name.endswith(".json"):
@@ -252,7 +275,7 @@ async def generate(
 
     try:
         urls = generate_media(prompt, str(workflow_path), reference_filename=uploaded_filename, width=width,
-            height=height, fps=fps, frame_count=frame_count)
+            height=height, fps=fps, frame_count=frame_count,steps=steps, shift=shift,)
         return {
             "status": "success",
             "images": urls,

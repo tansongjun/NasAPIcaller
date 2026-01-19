@@ -27,7 +27,7 @@ function App() {
   )
   const [width, setWidth] = useState(1024)
   const [height, setHeight] = useState(1024)
-
+  const [steps, setSteps] = useState(9);
   // Video mode
   const [videoPrompt, setVideoPrompt] = useState(
     'Cinematic scene: a man in black tuxedo sings opera in red-tiled bathroom, emotional performance, static camera'
@@ -40,7 +40,7 @@ function App() {
   const [error, setError] = useState<string | null>(null)
   const [referenceFile, setReferenceFile] = useState<File | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-
+  const [shift, setShift] = useState(3.0);  // default 3.0
   const [activeTab, setActiveTab] = useState('image')
 
   // Load workflows
@@ -87,6 +87,9 @@ function App() {
         formData.append('fps', String(fps))
         formData.append('frame_count', String(frameCount))
       }
+
+      formData.append('steps', String(steps));
+      formData.append('shift', shift.toFixed(1));
 
       const res = await fetch('http://localhost:8000/generate', {
         method: 'POST',
@@ -183,6 +186,39 @@ function App() {
                       className="w-full rounded-md border px-3 py-2"
                     />
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Shift (Noise Schedule)</label>
+                  <div className="flex items-center gap-4">
+                    <input
+                      type="range"
+                      min={1.0}
+                      max={7.0}
+                      step={0.1}
+                      value={shift}
+                      onChange={(e) => setShift(Number(e.target.value))}
+                      className="w-full"
+                    />
+                    <span className="text-sm font-medium w-12 text-center">{shift.toFixed(1)}</span>
+                  </div>
+                  <p className="text-xs text-slate-500">
+                    {shift <= 3 ? 'Faster, more details early' : shift >= 5 ? 'Cleaner, better composition' : 'Balanced'}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Steps (4-20 recommended)</label>
+                  <input
+                    type="number"
+                    min={4}
+                    max={20}
+                    step={1}
+                    value={steps}
+                    onChange={e => setSteps(Number(e.target.value))}
+                    className="w-full rounded-md border px-3 py-2"
+                  />
+                  <p className="text-xs text-slate-500">Lower = faster, higher = more detail</p>
                 </div>
 
                 {/* Reference */}

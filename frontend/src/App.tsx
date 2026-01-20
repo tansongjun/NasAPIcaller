@@ -29,7 +29,7 @@ function App() {
   const [width, setWidth] = useState(1024)
   const [height, setHeight] = useState(1024)
   const [steps, setSteps] = useState(9);
-  // Video mode
+  const [cfg, setCfg] = useState<number | null>(null);  // null = don't override
   const [videoPrompt, setVideoPrompt] = useState(
     'Cinematic scene: a man in black tuxedo sings opera in red-tiled bathroom, emotional performance, static camera'
   )
@@ -66,9 +66,9 @@ function App() {
   }, []);
 
   const handleGenerate = async () => {
-    
-    const workflow = activeTab === 'image' 
-      ? selectedImageWorkflow 
+
+    const workflow = activeTab === 'image'
+      ? selectedImageWorkflow
       : selectedVideoWorkflow;
 
     if (!workflow) {
@@ -79,7 +79,7 @@ function App() {
     setLoading(true)
     setError(null)
     setResults([])
-    
+
     try {
       const formData = new FormData()
       formData.append('workflow_name', workflow)
@@ -87,6 +87,10 @@ function App() {
       // Common
       if (referenceFile) {
         formData.append('reference_image', referenceFile)
+      }
+
+      if (activeTab === 'image' && cfg !== null) {
+        formData.append('cfg', cfg.toFixed(1));
       }
 
       // Mode-specific
@@ -245,6 +249,22 @@ function App() {
                   <p className="text-xs text-slate-500">Lower = faster, higher = more detail</p>
                 </div>
 
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">CFG Scale</label>
+                  <input
+                    type="number"
+                    min={0.5}
+                    max={20}
+                    step={0.1}
+                    value={cfg ?? 1.0}  // you'll need to add const [cfg, setCfg] = useState<number | null>(null);
+                    onChange={e => setCfg(parseFloat(e.target.value) || null)}
+                    className="w-full rounded-md border px-3 py-2"
+                  />
+                  <p className="text-xs text-slate-500">
+                    1.0 = creative (turbo models), 4–8 = stronger prompt following
+                  </p>
+                </div>
+
                 {/* Reference */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Reference Image (optional)</label>
@@ -398,57 +418,57 @@ function App() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {results.map((url, i) => {
-  // Determine if it's a video by looking at the filename parameter
-  const isVideo = (() => {
-    if (typeof url !== 'string') return false;
-    
-    try {
-      const urlObj = new URL(url);
-      const filename = urlObj.searchParams.get('filename')?.toLowerCase() || '';
-      return filename.endsWith('.mp4') ||
-             filename.endsWith('.webm') ||
-             filename.endsWith('.mov') ||
-             filename.endsWith('.gif');
-    } catch {
-      // Fallback if URL is malformed
-      const lower = url.toLowerCase();
-      return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.gif');
-    }
-  })();
+                  // Determine if it's a video by looking at the filename parameter
+                  const isVideo = (() => {
+                    if (typeof url !== 'string') return false;
 
-  return (
-    <div
-      key={i}
-      className="rounded-lg overflow-hidden border border-slate-200 bg-white shadow-sm"
-    >
-      {isVideo ? (
-        <video
-          controls
-          loop
-          autoPlay
-          muted={false}           // ← try without muted first
-          playsInline             // important for mobile & some browsers
-          className="w-full h-auto"
-          onError={(e) => {
-            console.error("Video failed to load:", url, e);
-            alert("Video load error - check console for details");
-          }}
-          onLoadedData={() => console.log("Video loaded successfully:", url)}
-        >
-          <source src={url} type="video/mp4" />  {/* explicit type helps */}
-          Your browser does not support the video tag.
-        </video>
-      ) : (
-        <img
-          src={url}
-          alt={`Generated ${i + 1}`}
-          className="w-full h-auto"
-          onError={() => console.error("Image failed:", url)}
-        />
-      )}
-    </div>
-  );
-})}
+                    try {
+                      const urlObj = new URL(url);
+                      const filename = urlObj.searchParams.get('filename')?.toLowerCase() || '';
+                      return filename.endsWith('.mp4') ||
+                        filename.endsWith('.webm') ||
+                        filename.endsWith('.mov') ||
+                        filename.endsWith('.gif');
+                    } catch {
+                      // Fallback if URL is malformed
+                      const lower = url.toLowerCase();
+                      return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.gif');
+                    }
+                  })();
+
+                  return (
+                    <div
+                      key={i}
+                      className="rounded-lg overflow-hidden border border-slate-200 bg-white shadow-sm"
+                    >
+                      {isVideo ? (
+                        <video
+                          controls
+                          loop
+                          autoPlay
+                          muted={false}           // ← try without muted first
+                          playsInline             // important for mobile & some browsers
+                          className="w-full h-auto"
+                          onError={(e) => {
+                            console.error("Video failed to load:", url, e);
+                            alert("Video load error - check console for details");
+                          }}
+                          onLoadedData={() => console.log("Video loaded successfully:", url)}
+                        >
+                          <source src={url} type="video/mp4" />  {/* explicit type helps */}
+                          Your browser does not support the video tag.
+                        </video>
+                      ) : (
+                        <img
+                          src={url}
+                          alt={`Generated ${i + 1}`}
+                          className="w-full h-auto"
+                          onError={() => console.error("Image failed:", url)}
+                        />
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </CardContent>
           </Card>

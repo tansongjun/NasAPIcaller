@@ -94,7 +94,7 @@ def find_reference_image_for_workflow(wf_name: str) -> str | None:
 
 def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, reference_filename: str | None = None, 
                    width: int | None = None, height: int | None = None, fps: int | None = None, frame_count: int | None = None, 
-                   steps: int | None = None, shift: float | None = None):
+                   steps: int | None = None, shift: float | None = None, cfg: float | None = None):
     workflow = load_workflow(workflow_file)
 
     # Override primitive nodes (very common in LTX-2 workflows)
@@ -110,6 +110,14 @@ def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
         if cls in ["PrimitiveInt", "PrimitiveFloat"] and "Frame Rate" in node["_meta"].get("title", ""):
             if fps is not None:
                 node["inputs"]["value"] = fps
+        
+        #CFG
+        if cls == "KSampler" and cfg is not None:
+            if "cfg" in node["inputs"]:
+                node["inputs"]["cfg"] = cfg
+                print(f"Overrode KSampler CFG to {cfg}")
+            else:
+                print("Warning: No 'cfg' input found in KSampler node – cannot override")
         
         # Steps
         if cls == "KSampler":
@@ -258,6 +266,7 @@ async def generate(
     frame_count: int = Form(121),
     steps: int | None = Form(9),
     shift: float | None = Form(3.0),
+    cfg: float | None = Form(None),               # ← NEW: add this
     reference_image: UploadFile | None = File(None),
 ):
     if not workflow_name.endswith(".json"):
@@ -275,7 +284,7 @@ async def generate(
 
     try:
         urls = generate_media(prompt, str(workflow_path), reference_filename=uploaded_filename, width=width,
-            height=height, fps=fps, frame_count=frame_count,steps=steps, shift=shift,)
+            height=height, fps=fps, frame_count=frame_count,steps=steps, shift=shift,cfg=cfg,)
         return {
             "status": "success",
             "images": urls,

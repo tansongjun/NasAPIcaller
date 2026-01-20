@@ -19,8 +19,9 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 function App() {
   const [workflows, setWorkflows] = useState<string[]>([])
-  const [selectedWorkflow, setSelectedWorkflow] = useState('')
-
+  // const [selectedWorkflow, setSelectedWorkflow] = useState('')
+  const [selectedImageWorkflow, setSelectedImageWorkflow] = useState('');
+  const [selectedVideoWorkflow, setSelectedVideoWorkflow] = useState('');
   // Image mode
   const [imagePrompt, setImagePrompt] = useState(
     'A cute girl version of the reference toddler character, same pose, same yellow onesie, Pixar style, full body'
@@ -47,27 +48,41 @@ function App() {
   useEffect(() => {
     fetch('http://localhost:8000/workflows')
       .then(res => {
-        if (!res.ok) throw new Error('Failed to fetch workflows')
-        return res.json()
+        if (!res.ok) throw new Error('Failed to fetch workflows');
+        return res.json();
       })
       .then(data => {
-        const wfList = data.workflows || []
-        setWorkflows(wfList)
-        if (wfList.length > 0) setSelectedWorkflow(wfList[0])
+        const wfList = data.workflows || [];
+        setWorkflows(wfList);
+
+        // Set sensible defaults when workflows are loaded
+        if (wfList.length > 0) {
+          // You can make this smarter (e.g. look for names containing "image" / "txt2img" / "video")
+          setSelectedImageWorkflow(wfList.find(w => w.includes('image') || w.includes('hidream') || w.includes('qwen')));
+          setSelectedVideoWorkflow(wfList.find(w => w.includes('video'))); // or  || wfList[0]
+        }
       })
-      .catch(err => setError(err.message))
-  }, [])
+      .catch(err => setError(err.message));
+  }, []);
 
   const handleGenerate = async () => {
-    if (!selectedWorkflow) return
+    
+    const workflow = activeTab === 'image' 
+      ? selectedImageWorkflow 
+      : selectedVideoWorkflow;
+
+    if (!workflow) {
+      setError("Please select a workflow first");
+      return;
+    }
 
     setLoading(true)
     setError(null)
     setResults([])
-
+    
     try {
       const formData = new FormData()
-      formData.append('workflow_name', selectedWorkflow)
+      formData.append('workflow_name', workflow)
 
       // Common
       if (referenceFile) {
@@ -109,6 +124,15 @@ function App() {
       setLoading(false)
     }
   }
+  const imageWorkflows = workflows.filter(w =>
+    /image|img|txt2img|sdxl|flux|hidream|qwen|dream|realistic/i.test(w.toLowerCase())
+  );
+
+  const videoWorkflows = workflows.filter(w =>
+    /video|animate|motion|ltx|svd|animatediff|t2v/i.test(w.toLowerCase())
+  );
+  const displayedImageWorkflows = imageWorkflows.length > 0 ? imageWorkflows : workflows;
+  const displayedVideoWorkflows = videoWorkflows.length > 0 ? videoWorkflows : workflows;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-white via-slate-50 to-indigo-50 p-6 md:p-8 text-slate-900">
@@ -137,12 +161,12 @@ function App() {
                 {/* Workflow */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Workflow</label>
-                  <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
+                  <Select value={selectedImageWorkflow} onValueChange={setSelectedImageWorkflow}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select workflow..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {workflows.map(wf => (
+                      {displayedImageWorkflows.map(wf => (
                         <SelectItem key={wf} value={wf}>
                           {wf}
                         </SelectItem>
@@ -253,7 +277,7 @@ function App() {
 
                 <Button
                   onClick={handleGenerate}
-                  disabled={loading || !selectedWorkflow || !imagePrompt.trim()}
+                  disabled={loading || !selectedImageWorkflow || !imagePrompt.trim()}
                   className="w-full h-12 text-lg bg-indigo-600 hover:bg-indigo-700"
                 >
                   {loading ? 'Generating...' : 'Generate Image'}
@@ -275,12 +299,12 @@ function App() {
                 {/* Workflow */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Workflow</label>
-                  <Select value={selectedWorkflow} onValueChange={setSelectedWorkflow}>
+                  <Select value={selectedVideoWorkflow} onValueChange={setSelectedVideoWorkflow}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select video workflow..." />
                     </SelectTrigger>
                     <SelectContent>
-                      {workflows.map(wf => (
+                      {displayedVideoWorkflows.map(wf => (
                         <SelectItem key={wf} value={wf}>
                           {wf}
                         </SelectItem>
@@ -353,7 +377,7 @@ function App() {
 
                 <Button
                   onClick={handleGenerate}
-                  disabled={loading || !selectedWorkflow || !videoPrompt.trim()}
+                  disabled={loading || !selectedVideoWorkflow || !videoPrompt.trim()}
                   className="w-full h-12 text-lg bg-violet-600 hover:bg-violet-700"
                 >
                   {loading ? 'Generating Video...' : 'Generate Video'}
@@ -374,9 +398,23 @@ function App() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {results.map((url, i) => {
-  const isVideo = url.toLowerCase().endsWith('.mp4') || 
-                  url.toLowerCase().endsWith('.webm') || 
-                  url.toLowerCase().endsWith('.gif');
+  // Determine if it's a video by looking at the filename parameter
+  const isVideo = (() => {
+    if (typeof url !== 'string') return false;
+    
+    try {
+      const urlObj = new URL(url);
+      const filename = urlObj.searchParams.get('filename')?.toLowerCase() || '';
+      return filename.endsWith('.mp4') ||
+             filename.endsWith('.webm') ||
+             filename.endsWith('.mov') ||
+             filename.endsWith('.gif');
+    } catch {
+      // Fallback if URL is malformed
+      const lower = url.toLowerCase();
+      return lower.includes('.mp4') || lower.includes('.webm') || lower.includes('.gif');
+    }
+  })();
 
   return (
     <div

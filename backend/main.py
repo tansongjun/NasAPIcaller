@@ -1,6 +1,6 @@
 # backend/main.py
 from time import time
-import requests, json, time, os
+import requests, json, time, os, uvicorn
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,7 +8,11 @@ import uuid
 import json
 from pathlib import Path
 
-SERVER_ADDRESS = "http://127.0.0.1:8188"
+# To run comfyui server locally, uncomment this:
+# SERVER_ADDRESS = "http://127.0.0.1:8188"
+
+# To run comfyui server anywhere else, set its local IP here:
+SERVER_ADDRESS = "http://192.168.1.156:8888"
 
 def upload_uploadfile_to_comfyui(upload: UploadFile, server_address: str = SERVER_ADDRESS, overwrite: bool = True) -> str | None:
     filename = upload.filename or f"reference_{uuid.uuid4().hex}.png"
@@ -236,7 +240,7 @@ app = FastAPI(title="NAS ComfyUI Runner API")
 
 origins = [
     "http://localhost:5173",
-    "http://127.0.0.1:5173",     # Chrome treats these differently sometimes
+    "http://127.0.0.1:5173",
     "http://localhost",
     "http://127.0.0.1",
 ]
@@ -266,7 +270,7 @@ async def generate(
     frame_count: int = Form(121),
     steps: int | None = Form(9),
     shift: float | None = Form(3.0),
-    cfg: float | None = Form(None),               # ← NEW: add this
+    cfg: float | None = Form(None),
     reference_image: UploadFile | None = File(None),
 ):
     if not workflow_name.endswith(".json"):
@@ -299,7 +303,6 @@ async def generate(
 
 # ============================= MAIN =============================
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
 
 # Past prompts

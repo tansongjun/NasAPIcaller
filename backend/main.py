@@ -148,7 +148,7 @@ def generate_media(prompt, workflow_file, server_address=SERVER_ADDRESS, referen
         if ref_path:
             uploaded_filename = upload_image(ref_path, server_address)
         else:
-            print("   No reference image found for this workflow")
+            print("No reference image found for this workflow")
 
     def snap_to_64(x: int) -> int:
         return max(256, (x // 64) * 64)

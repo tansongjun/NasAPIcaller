@@ -9,10 +9,10 @@ import json
 from pathlib import Path
 
 # To run comfyui server locally, uncomment this:
-# SERVER_ADDRESS = "http://127.0.0.1:8188"
+SERVER_ADDRESS = "http://127.0.0.1:8188"
 
 # To run comfyui server anywhere else, set its local IP here:
-SERVER_ADDRESS = "http://192.168.1.156:8888"
+# SERVER_ADDRESS = "http://192.168.1.156:8888"
 
 def upload_uploadfile_to_comfyui(upload: UploadFile, server_address: str = SERVER_ADDRESS, overwrite: bool = True) -> str | None:
     filename = upload.filename or f"reference_{uuid.uuid4().hex}.png"

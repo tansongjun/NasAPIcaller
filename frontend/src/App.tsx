@@ -57,7 +57,6 @@ function App() {
 
         // Set sensible defaults when workflows are loaded
         if (wfList.length > 0) {
-          // You can make this smarter (e.g. look for names containing "image" / "txt2img" / "video")
           setSelectedImageWorkflow(wfList.find(w => w.includes('image') || w.includes('hidream') || w.includes('qwen')));
           setSelectedVideoWorkflow(wfList.find(w => w.includes('video'))); // or  || wfList[0]
         }
